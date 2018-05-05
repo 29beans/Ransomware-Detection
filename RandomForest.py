@@ -119,7 +119,7 @@ def RFclassification(n_list=n_list, k=k):
 			print("model creation start %d" %turn)
 			rf=RandomForestClassifier()
 			rf.fit(X_train, y_train)
-			predictions=rf.predict(X_test)
+			y_pred=rf.predict(X_test)
 			print("model creation finished %d" %turn)
 			# for memory management
 			# del(X_train, X_test, y_train, y_test)
