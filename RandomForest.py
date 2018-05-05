@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
 
 data_dir=sys.argv[1]+"\\"
+k=int(sys.argv[sys.argv.index("-k")+1])
 
 n_list=[]
 
@@ -22,8 +23,6 @@ if "-n" in sys.argv:
 		i+=1
 		if i == len(sys.argv):
 			break
-
-k=int(sys.argv[sys.argv.index("-k")+1])
 
 def loadCSVwithPandas(n, data_dir=data_dir):
 	file_name="norm_"+str(n)+"_gram_vector.csv"
