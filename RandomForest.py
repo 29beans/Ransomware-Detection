@@ -6,12 +6,12 @@ import numpy as np
 from scipy.sparse import *
 from pympler.asizeof import asizeof
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold,StratifiedKFold
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_score, recall_score
 
 data_dir=sys.argv[1]+"\\"
-k=int(sys.argv[sys.argv.index("-k")+1])
+result_dir="C:\\python_code\\feature_set\\result\\"
 
 n_list=[]
 
@@ -24,12 +24,23 @@ if "-n" in sys.argv:
 		if i == len(sys.argv):
 			break
 
+k=int(sys.argv[sys.argv.index("-k")+1])
+
+if "-norm" in sys.argv:
+	normalize=True
+else:
+	normalize=False
+
 def loadCSVwithPandas(n, data_dir=data_dir):
-	file_name="norm_"+str(n)+"_gram_vector.csv"
+	if normalize:
+		file_name="norm_"+str(n)+"_gram_vector.csv"
+	else:
+		file_name=str(n)+"_gram_vector.csv"
+
 	row_num, col_num = CountRowsAndColumns(file_name)
 
-	X=pd.read_csv(data_dir+file_name, header=None, usecols=list(range(col_num-1)), dtype=np.float16).as_matrix()
-	y=pd.read_csv(data_dir+file_name, header=None, usecols=[col_num-1], dtype=np.int8).as_matrix()
+	X=pd.read_csv(data_dir+file_name, header=None, usecols=list(range(col_num-1)), dtype=np.float32).as_matrix()
+	y=pd.read_csv(data_dir+file_name, header=None, usecols=[col_num-1], dtype=np.int8, squeeze=True).as_matrix()
 
 	return X, y
 
@@ -38,12 +49,16 @@ def CountRowsAndColumns(file_name, data_dir=data_dir):
 		data=csv.reader(f)
 		row_num=len(f.readlines())
 		f.seek(0)
-		column_num=len(next(data))
+		col_num=len(next(data))
 		f.seek(0)
-	return row_num, column_num
+	return row_num, col_num
 
 def SparseMatrix(n, data_dir=data_dir):
-	file_name="norm_"+str(n)+"_gram_vector.csv"
+	if normalize:
+		file_name="norm_"+str(n)+"_gram_vector.csv"
+	else:
+		file_name=str(n)+"_gram_vector.csv"
+
 	with open(data_dir+file_name,'r',encoding="utf-8") as f:
 		data=csv.reader(f)
 		row_num, col_num=CountRowsAndColumns(file_name)
@@ -73,7 +88,7 @@ def loadCSV(n, n_list=n_list, data_dir=data_dir):
 		print("row: %d, column: %d" %(row_num, col_num))
 		X, y = [], []
 		row_idx=0
-		print("Vector Construction succeed!")
+		# print("Vector Construction Succeed!")
 
 		# load CSV into X, y
 		for row in data:
@@ -88,51 +103,81 @@ def loadCSV(n, n_list=n_list, data_dir=data_dir):
 	print("%dth data loading finished" %n)
 	# return 0,1
 	return X, y
-	
+
+def SaveAsFile(f, i, n, accuracy, report):
+		f.write("--------------- %dth exp result (n: %d) ---------------\n" %(i, n))
+		f.write("Total Accuracy: %f\n\n" %accuracy)
+		f.write(report)
+		f.write("\n\n")
+
+def SaveRandomSplittedIndex(X, y, k=k):
+	train_index_list, test_index_list= [], []
+	skf=StratifiedKFold(n_splits=k, shuffle=True)
+	for train_index, test_index in skf.split(X,y):
+		train_index_list.append(train_index)
+		test_index_list.append(test_index)
+
+	return train_index_list, test_index_list
+
 #Random Forest classification in k-fold cross validation style
 def RFclassification(n_list=n_list, k=k):
 	
+	# Wipe out previous saved file
+	f=open(result_dir+"RF_classification_result.txt", 'w')
+	f.close()
+
 	for n in n_list:
 		
-		if n>=4:
+		if n>=3:
 			X, y=SparseMatrix(n)
 		else:
 			X, y=loadCSVwithPandas(n)
 
-		print("load CSV Done!")
+		# print("load CSV Done!")
 		# while True:
 			# a=1
 
-		kf=KFold(n_splits=k, shuffle=True)
+		# skf=StratifiedKFold(n_splits=k, shuffle=True)
 
 		# k-fold cross validation start
-		turn=0
-		for train_index, test_index in kf.split(X):
-			turn+=1
+		# turn=0
+		train_index_list, test_index_list = SaveRandomSplittedIndex(X, y)
+		for turn in range(k):
 
-			if n>=4:
-				X_train, X_test = X[train_index,:], X[test_index,:]
+			if n>=3:
+				X_train, X_test = X[train_index_list[turn],:], X[test_index_list[turn],:]
 			else:
-				X_train, X_test = [X[i] for i in train_index], [X[i] for i in test_index]
-			y_train, y_test = [y[i] for i in train_index], [y[i] for i in test_index]
+				X_train, X_test = [X[i] for i in train_index_list[turn]], [X[i] for i in test_index_list[turn]]
+			y_train, y_test = [y[i] for i in train_index_list[turn]], [y[i] for i in test_index_list[turn]]
 			
-			print("model creation start %d" %turn)
+			# print("model creation start %d" %turn)
 			rf=RandomForestClassifier()
 			rf.fit(X_train, y_train)
 			y_pred=rf.predict(X_test)
-			print("model creation finished %d" %turn)
+			# print("model creation finished %d" %turn)
+
 			# for memory management
 			# del(X_train, X_test, y_train, y_test)
-			accuracy=accuracy_score(y_test, predictions)
-			precision=precision_score(y_test, predictions, average=None)
-			recall=recall_score(y_test, predictions, average=None)
+			accuracy=accuracy_score(y_test, y_pred)
+			precision=precision_score(y_test, y_pred, average=None)
+			recall=recall_score(y_test, y_pred, average=None)
 			
-			print("------------ %dth Classification Result (n: %d) -------------" %(turn,n))
+			print("------------ %dth Classification Result (n: %d) -------------" %(turn+1,n))
 			print("Total Accuracy: %.5f" %accuracy)	
 			print("benign pre, rec: %.5f, %.5f" %(precision[0],recall[0]))
 			print("malware pre, rec: %.5f, %.5f" %(precision[1],recall[1]))
 			print("ransom pre, rec: %.5f, %.5f" %(precision[2],recall[2]))
 			print()
-	
+
+			report=classification_report(y_test, y_pred, target_names=["benign","malware","ransom"], digits=5)
+			print(report)
+			result, counts = np.unique(y_pred, return_counts=True)
+			print("------ predicted label distribution ------")
+			print(dict(zip(result, counts)))
+			print()
+			
+			f=open(result_dir+"RF_classification_result.txt", 'a')
+			SaveAsFile(f, turn+1, n, accuracy, report)
+
 # Classification start
 RFclassification()
