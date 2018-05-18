@@ -2,10 +2,19 @@ import sys
 import os
 import operator
 import random
+import pandas as pd
+import numpy as np
 
-sample_dir_ben=sys.argv[1]+"/"
-sample_dir_mal=sys.argv[2]+"/"
-sample_dir_ran=sys.argv[3]+"/"
+# sample_dir_ben=sys.argv[1]+"/"
+# sample_dir_mal=sys.argv[2]+"/"
+# sample_dir_ran=sys.argv[3]+"/"
+
+sample_dir_ben="G:\\ben_NT_syscall(manual)\\"
+sample_dir_mal="G:\\mal_NT_syscall(filtered)\\"
+sample_dir_ran="G:\\ran_NT_syscall(filtered3)\\"
+
+weight_path="C:\\exp_data\\RTFRD\\CF-NCF_anal\\"
+feature_header_path="C:\\exp_data\\feature_set\\"
 
 arg_num=len(sys.argv)-1
 # threshold_num cannot be zero!! 
@@ -258,17 +267,28 @@ def Zw_To_Nt_Translator(target_list):
 		if Zw_starter.startswith('Zw'):
 			target_list[i]='Nt'+Zw_starter[2:]
 
-"""
-def CountSubList(source_list, target_gram, n):
-	count=0
-	for i in range(len(source_list)-n+1):
-		if source_list[i:i+n] == target_gram:
-			count+=1
-	return count
-"""
+def CF_NCF_Weight(n, feature_header, class_label, weight_path=weight_path):
+	file_name=class_label+"_"+str(n)+"_gram_CF_NCF.csv"
+	with open(feature_header, 'r') as f:
+		feature_list=f.read().split('\n')
+		feature_list.pop()
+
+	w_data=pd.read_csv(weight_path+file_name, header=None).as_matrix()
+	CF_weight=w_data[0]
+	NCF_weight=w_data[1]
+	col_num=w_data.shape[1]
+	print("weight vector column num: %d" %col_num)
+
+	weight={key:value for key, value in zip(feature_list, [CF_weight[i] * (1 - NCF_weight[i]) for i in range(col_num)])}
+	return weight
+
+def ApplyWeight(weight_vector, target_vector):
+
+	for feature in target_vector.keys():
+		target_vector[feature]*=weight_vector[str(feature)]
 
 # training phase for 10-fold cross validation
-def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_list):
+def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_list, class_label):
 
 	#f os.path.isfile(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+threshold_list[l]+"%.txt")
 	#print("threshold: ",threshold_list)
@@ -276,6 +296,12 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 	n_num=len(n_list)
 
 	training_list=[]
+
+	# Weight Vector Construction
+	weight_vector={ key:value for key, value in zip(n_list, [dict() for n in n_list])}
+	for n in n_list:
+		feature_header_fname=feature_header_path+str(n)+"_gram_features.txt"
+		weight_vector[n]=CF_NCF_Weight(n, feature_header_fname, class_label)
 
 	# Restore the training lists created in earlier training phase
 	# Do not update it with randomization
@@ -289,10 +315,7 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 		total_file_num=0
 		total_gram_count=0
 
-		n_gram_dic_list=[]
-		for index in n_list: 
-			n_gram_dic_list.append({})
-		#n_gram_matrix={}
+		n_gram_dic_list={key: value for key, value in zip(n_list, [dict() for i in n_list])}
 
 	# n-gram training phase for each of training chunk
 		for name in training_list[i]:  # for each of files 
@@ -301,9 +324,7 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 			data=f.readlines()
 			total_file_num+=1
 
-			temp_dic_list=[]
-			for index in n_list:
-				temp_dic_list.append({})
+			temp_dic_list={key: value for key, value in zip(n_list, [dict() for i in n_list])}
 			# Translate API-DLL raw data into API_seq data
 			data_seq=Delete_DLL(data)
 			#print(data_seq)
@@ -317,10 +338,9 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 			# Ignore the last n-grams of n's (except the biggest one) for convenience
 
 			for j in range(len(data_seq)-max_n+1):   
-				for index in range(len(n_list)):
-					n=n_list[index]
+				for n in n_list:
 					n_gram=tuple(data_seq[j:j+n])
-					temp_dic=temp_dic_list[index]
+					temp_dic=temp_dic_list[n]
 
 					if n_gram in temp_dic:
 						temp_dic[n_gram]+=1
@@ -329,9 +349,9 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 
 			# Restore the saved n-gram count of each file into the n_gram_matrix
 			# After normalization of each n-gram count w.r.t. each file's log size
-			for index in range(len(n_list)):
-				temp_dic=temp_dic_list[index]
-				n_gram_dic=n_gram_dic_list[index]
+			for n in n_list:
+				temp_dic=temp_dic_list[n]
+				n_gram_dic=n_gram_dic_list[n]
 
 				for n_gram in list(temp_dic.keys()):
 					if n_gram in n_gram_dic:
@@ -341,16 +361,18 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 
 			f.close()
 
-		
+		# Apply Weight after n-gram dictionarization completed
+		for n in n_list:
+			ApplyWeight(weight_vector[n], n_gram_dic_list[n])
+
 		#print(n_gram_matrix)
 		#print("sum: %d" %sum(n_gram_matrix.values()))
-		sorted_result_list=[]
+		sorted_result_list={}
 
 		# Write training files into appropriate directory path
-		for j in range(n_num):
-			n_gram_dic=n_gram_dic_list[j]
-			n=n_list[j]
-			sorted_result_list.append(sorted(n_gram_dic.items(), key=operator.itemgetter(1), reverse=True))
+		for n in n_list:
+			n_gram_dic=n_gram_dic_list[n]
+			sorted_result_list[n]=sorted(n_gram_dic.items(), key=operator.itemgetter(1), reverse=True)
 			norm_total_gram_count=(1000000-max_n+1)*total_file_num
 
 			if not os.path.isdir(training_dir+str(n)+"_gram"):
@@ -360,7 +382,7 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 				os.mkdir(training_dir+str(n)+"_gram/training_total")
 			out=open(training_dir+str(n)+"_gram/training_total/"+"training_total_"+str(i+1)+".txt", 'w')
 
-			sorted_result=sorted_result_list[j]
+			sorted_result=sorted_result_list[n]
 
 			for l in range(len(sorted_result)):
 				out.write(str(sorted_result[l][0]) + "\t" + str(sorted_result[l][1]/norm_total_gram_count) + "\n")
@@ -372,9 +394,9 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 
 			# prune the trained result by the threshold percentage of total # of individual api 
 
-			for l in range(len(threshold_list)):
-				out=open(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+threshold_list[l]+"%.txt", 'w')
-				cut_index=ReturnCutIndex(sorted_result, threshold_list[l], norm_total_gram_count)  # Cut sorted result by accumulative percentage(threshold) of system call
+			for th in threshold_list:
+				out=open(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+th+"%.txt", 'w')
+				cut_index=ReturnCutIndex(sorted_result, th, norm_total_gram_count)  # Cut sorted result by accumulative percentage(threshold) of system call
 				cut_result=sorted_result[:cut_index]
 				
 				# counting the total gram count in signature list 
@@ -750,13 +772,13 @@ if SplitApplied:
 if TrainingApplied:
 	if IsBen:
 		print("------------------------- Benign Training -------------------------")
-		Training(k, n_list, training_list_dir_ben, training_dir_ben, sample_dir_ben, ben_th_list)
+		Training(k, n_list, training_list_dir_ben, training_dir_ben, sample_dir_ben, ben_th_list, "ben")
 	if IsMal:
 		print("------------------------- Malware Training -------------------------")
-		Training(k, n_list, training_list_dir_mal, training_dir_mal, sample_dir_mal, mal_th_list)
+		Training(k, n_list, training_list_dir_mal, training_dir_mal, sample_dir_mal, mal_th_list, "mal")
 	if IsRan:
 		print("------------------------- Ransom Training -------------------------")
-		Training(k, n_list, training_list_dir_ran, training_dir_ran, sample_dir_ran, ran_th_list)
+		Training(k, n_list, training_list_dir_ran, training_dir_ran, sample_dir_ran, ran_th_list, "ran")
 
 # classification phase start
 if ClassificationApplied:
