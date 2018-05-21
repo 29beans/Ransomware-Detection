@@ -4,6 +4,8 @@ import operator
 import random
 import pandas as pd
 import numpy as np
+import csv
+from scipy.sparse import lil_matrix
 
 # sample_dir_ben=sys.argv[1]+"/"
 # sample_dir_mal=sys.argv[2]+"/"
@@ -15,6 +17,8 @@ sample_dir_ran="G:\\ran_NT_syscall(filtered3)\\"
 
 weight_path="C:\\exp_data\\RTFRD\\CF-NCF_anal\\"
 feature_header_path="C:\\exp_data\\feature_set\\"
+file_seq_path="C:\\exp_data\\feature_set\\"
+CSV_path="C:\\exp_data\\feature_set\\output\\"
 
 arg_num=len(sys.argv)-1
 # threshold_num cannot be zero!! 
@@ -126,11 +130,12 @@ print("ben_th_list: ", ben_th_list)
 print("mal_th_list: ", mal_th_list)
 print("ran_th_list: ", ran_th_list)
 
-training_dir_ben="G:/benign_training(manual)/"
-training_dir_mal="G:/malware_training/"
-training_dir_ran="G:/ransom_training/"
+training_dir_ben="G:/training/benign_training(manual)/"
+training_dir_mal="G:/training/malware_training/"
+training_dir_ran="G:/training/ransom_training/"
 
 classification_output_dir="G:/classification_result/"
+classification_output_dir_CF_NCF="G:/classification_result/CF_NCF/"
 
 training_list_dir_ben=training_dir_ben+"training_list/"
 training_list_dir_mal=training_dir_mal+"training_list/"
@@ -140,11 +145,23 @@ cf_chunk_dir_ben=training_dir_ben+"chunk_list/"
 cf_chunk_dir_mal=training_dir_mal+"chunk_list/"
 cf_chunk_dir_ran=training_dir_ran+"chunk_list/"
 
+train_index_dir_ben="C:\\exp_data\\RTFRD\\training_index\\ben\\"
+train_index_dir_mal="C:\\exp_data\\RTFRD\\training_index\\mal\\"
+train_index_dir_ran="C:\\exp_data\\RTFRD\\training_index\\ran\\"
+
+cf_chunk_index_dir_ben="C:\\exp_data\\RTFRD\\cf_chunk_index\\ben\\"
+cf_chunk_index_dir_mal="C:\\exp_data\\RTFRD\\cf_chunk_index\\mal\\"
+cf_chunk_index_dir_ran="C:\\exp_data\\RTFRD\\cf_chunk_index\\ran\\"
+
 total_exp_count=0
 
 chunk_list_ben=[]
 chunk_list_mal=[]
 chunk_list_ran=[]
+
+cf_chunk_index_list_ben=[]
+cf_chunk_index_list_mal=[]
+cf_chunk_index_list_ran=[]
 
 total_ben_api_count=0
 total_mal_api_count=0
@@ -193,18 +210,9 @@ def InitializeDic(ben_sig_dic, mal_sig_dic, ran_sig_dic):
 
 def InitializeTFPN():
 	for i in range(n_num):
-		ben_TP[i]=0
-		ben_TN[i]=0
-		ben_FP[i]=0
-		ben_FN[i]=0
-		mal_TP[i]=0
-		mal_TN[i]=0
-		mal_FP[i]=0
-		mal_FN[i]=0
-		ran_TP[i]=0
-		ran_TN[i]=0
-		ran_FP[i]=0
-		ran_FN[i]=0
+		ben_TP[i], ben_TN[i], ben_FP[i], ben_FN[i]=0,0,0,0
+		mal_TP[i], mal_TN[i], mal_FP[i], mal_FN[i]=0,0,0,0
+		ran_TP[i], ran_TN[i], ran_FP[i], ran_FN[i]=0,0,0,0
 
 def SplitSamplesToChunks(k, sample_dir, training_list_dir, cf_chunk_dir, class_label):
 	
@@ -270,8 +278,7 @@ def Zw_To_Nt_Translator(target_list):
 def CF_NCF_Weight(n, feature_header, class_label, weight_path=weight_path):
 	file_name=class_label+"_"+str(n)+"_gram_CF_NCF.csv"
 	with open(feature_header, 'r') as f:
-		feature_list=f.read().split('\n')
-		feature_list.pop()
+		feature_list=f.read().split()
 
 	w_data=pd.read_csv(weight_path+file_name, header=None).as_matrix()
 	CF_weight=w_data[0]
@@ -509,6 +516,64 @@ def Classifier(f_output, chunk_list, sample_dir, class_label, ben_score, mal_sco
 	for j in range(n_num):
 		f_output[j].write("\n")
 
+def CountRowsAndColumns(file_name):
+	with open(file_name,'r', encoding="utf-8") as f:
+		data=csv.reader(f)
+		row_num=len(f.readlines())
+		f.seek(0)
+		col_num=len(next(data))
+		f.seek(0)
+	return row_num, col_num
+
+def SparseMatrix(file_name, row_num, col_num, CSV_dir=CSV_path):
+
+	with open(CSV_dir+file_name,'r',encoding="utf-8") as f:
+		data=csv.reader(f)
+
+		sparse_matrix=lil_matrix((row_num,col_num), dtype=np.int32)
+
+		row_idx=0
+		for row in data:
+			sparse_matrix[row_idx, :]=row
+			row_idx+=1
+
+	return sparse_matrix
+
+def ChunkIdxToFileName(file_seq_path=file_seq_path):
+	file_name=file_seq_path+"file_seq.txt"
+	idxToFileNameDic={}
+
+	with open(file_name, 'r') as f:
+		seq_data=f.readlines()
+
+		for i, line in enumerate(seq_data):
+			idxToFileNameDic[i]=line.split()[0]
+	return idxToFileNameDic
+
+def FeatureIdxToString(n_list=n_list, feature_path=feature_header_path, CSV_dir=CSV_path):
+	map_dic={key: value for key, value in zip(n_list, [{} for n in n_list])}
+
+	for n in n_list:
+		file_name=feature_path+str(n)+"_gram_features.txt"
+		with open(file_name, 'r') as f:
+			features=f.read().split()
+
+			for idx, feature_name in enumerate(features):
+				map_dic[n][idx]=feature_name
+	return map_dic
+
+def ClassifierWithCSV(f_output, cf_chunk_index_list, csv_matrix, idx_to_feature_name, idx_to_file, class_label, ben_score, mal_score, ran_score):
+	
+	global total_exp_count
+	for idx in cf_chunk_index_list:
+		total_exp_count+=1
+		InitializeScore(ben_score, mal_score, ran_score)
+		CalculateScoreWithCSV(csv_matrix, cf_chunk_index_list, idx, idx_to_feature_name)
+		EvaluateResult(f_output, idx_to_file[idx], class_label)
+
+	for j in range(n_num):
+		f_output[j].write("\n")
+		
 
 def CalculateScore(file_name, data, chunk_list, sample_dir):
 
@@ -525,6 +590,27 @@ def CalculateScore(file_name, data, chunk_list, sample_dir):
 
 			if target in ran_sig_dic[n_index]:
 				ran_score[n_index]+=ran_sig_dic[n_index][target]**2
+
+def CalculateScoreWithCSV(csv_matrix, cf_chunk_index_list, chunk_idx, idx_to_feature_name):
+
+	for n_index in range(n_num):
+		n=n_list[n_index]
+		sample_log=csv_matrix[n][chunk_idx,:].toarray()[0][:-1]
+		# print(sample_log)
+		for f_idx, f_count in enumerate(sample_log):
+			if f_count == 0:
+				continue
+
+			target=idx_to_feature_name[n][f_idx]
+
+			if target in ben_sig_dic[n_index]:
+				ben_score[n_index]+=f_count*(ben_sig_dic[n_index][target]**2)
+
+			if target in mal_sig_dic[n_index]:
+				mal_score[n_index]+=f_count*(mal_sig_dic[n_index][target]**2)
+
+			if target in ran_sig_dic[n_index]:
+				ran_score[n_index]+=f_count*(ran_sig_dic[n_index][target]**2)
 
 def EvaluateResult(f_output, file_name, answer):
 
@@ -611,7 +697,7 @@ def RecordSummary(f_output, class_label, result_trace, index):
 		f_output[j].write("\n\n")
 
 def RestoreChunkList():
-	# Restore the chunk lists randomly created form latest training phase
+	# Restore the chunk lists randomly created from latest training phase
 
 	for i in range(k):
 		if IsBen:
@@ -627,14 +713,23 @@ def RestoreChunkList():
 			chunk_list_ran.append(read_ran_chunk_list.read().split())
 			read_ran_chunk_list.close()
 
+def RestoreCfChunkIndexOfCSV(k=k):
+	for i in range(k):
+		if IsBen:
+			with open(cf_chunk_index_dir_ben+"cf_chunk_index_list_"+str(i)+".txt",'r') as f:
+				cf_chunk_index_list_ben.append(list(map(int,f.read().split())))
+		if IsMal:
+			with open(cf_chunk_index_dir_mal+"cf_chunk_index_list_"+str(i)+".txt",'r') as f:
+				cf_chunk_index_list_mal.append(list(map(int,f.read().split())))
+		if IsRan:
+			with open(cf_chunk_index_dir_ran+"cf_chunk_index_list_"+str(i)+".txt",'r') as f:
+				cf_chunk_index_list_ran.append(list(map(int,f.read().split())))
 
 def Classification(k, n_list, ben_threshold, mal_threshold, ran_threshold):
 
 	global total_exp_count
 	
-	b_str=""
-	m_str=""
-	r_str=""
+	b_str, m_str, r_str = "", "", ""
 
 	if IsBen:
 		b_str="benign,"
@@ -757,6 +852,143 @@ def Classification(k, n_list, ben_threshold, mal_threshold, ran_threshold):
 	for j in range(n_num):
 		f_output[j].close()	
 
+def ClassificationWithCSV(k, n_list, ben_threshold, mal_threshold, ran_threshold, CSV_dir=CSV_path):
+
+	global total_exp_count
+	
+	b_str, m_str, r_str = "", "", ""
+
+	if IsBen:
+		b_str="benign,"
+	if IsMal:
+		m_str="malware,"
+	if IsRan:
+		r_str="ransomware"
+
+	result_trace=[]
+	f_output=[]
+	csv_matrix={}
+	idx_to_file=ChunkIdxToFileName()
+	idx_to_feature_name=FeatureIdxToString()
+
+	for n in n_list:
+		if not os.path.isdir(classification_output_dir_CF_NCF+str(n)+"_gram/"):
+			os.mkdir(classification_output_dir_CF_NCF+str(n)+"_gram/")	
+		file_name=str(n)+"_gram_vector.csv"
+		row_num, col_num = CountRowsAndColumns(CSV_dir+file_name)
+		csv_matrix[n]=SparseMatrix(file_name, row_num, col_num)
+
+	print("CSV Loading Done!")
+
+	for i in range(n_num): 
+		f_output.append(open(classification_output_dir_CF_NCF+str(n_list[i])+"_gram/"+"cf_result_"+ben_threshold+"_"+mal_threshold+"_"+ran_threshold+".txt",'w'))
+		f_output[i].write("="*100+"\n\n")
+		f_output[i].write("This file shows the result of classification among %s %s %s\n\n" %(b_str, m_str, r_str))
+		
+		result_trace.append([])
+
+		if IsBen:
+			f_output[i].write("benign threshold: %d\n" %int(ben_threshold))
+		if IsMal:
+			f_output[i].write("malware threshold: %d\n" %int(mal_threshold))
+		if IsRan:
+			f_output[i].write("ransomware threshold: %d\n\n" %int(ran_threshold))
+		f_output[i].write("="*100+"\n\n")
+
+	# classification process start!!!
+	for i in range(k):	
+		total_exp_count=0
+
+		InitializeDic(ben_sig_dic, mal_sig_dic, ran_sig_dic)
+		InitializeTFPN()
+
+		for j in range(n_num):
+			f_output[j].write("-"*20+" Experiment "+str(i+1)+"-"*20 +"\n\n")
+
+		# read training file of corresponding threshold
+		# translate benign, ransom, malware training file into dictionary structure..
+
+		if IsBen:
+			MakeTrainedVector(i, n_list, training_dir_ben, ben_threshold, ben_sig_dic)
+		if IsMal:
+			MakeTrainedVector(i, n_list, training_dir_mal, mal_threshold, mal_sig_dic)
+		if IsRan:
+			MakeTrainedVector(i, n_list, training_dir_ran, ran_threshold, ran_sig_dic)
+
+		# Read each family's chunk file[i] and classification start
+
+		if IsBen:
+			ClassifierWithCSV(f_output, cf_chunk_index_list_ben[i], csv_matrix, idx_to_feature_name, idx_to_file, "benign", ben_score, mal_score, ran_score)
+		if IsMal:
+			ClassifierWithCSV(f_output, cf_chunk_index_list_mal[i], csv_matrix, idx_to_feature_name, idx_to_file, "malware", ben_score, mal_score, ran_score)
+		if IsRan:
+			ClassifierWithCSV(f_output, cf_chunk_index_list_ran[i], csv_matrix, idx_to_feature_name, idx_to_file, "ransom", ben_score, mal_score, ran_score)
+
+		# n-th classification experiment ended
+		# Save the result into file
+		print("-------------- Exp %d total result (ben: %s mal: %s ran: %s) --------------\n" %(i+1, ben_threshold, mal_threshold, ran_threshold))
+
+		for j in range(n_num):
+			ben_TFPN=ben_TP[j]+ben_TN[j]+ben_FP[j]+ben_FN[j]
+			mal_TFPN=mal_TP[j]+mal_TN[j]+mal_FP[j]+mal_FN[j]
+			ran_TFPN=ran_TP[j]+ran_TN[j]+ran_FP[j]+ran_FN[j]
+
+			if total_exp_count != max(ben_TFPN, mal_TFPN, ran_TFPN):
+				print("------------------------- Experiment %d error -------------------------" %(i+1))
+				print ("Total exp count: %d\t TFPN: %d" %(total_exp_count, max(ben_TFPN, mal_TFPN, ran_TFPN)))
+			
+			f_output[j].write("\n")
+			f_output[j].write("-------------------- Exp %d total result --------------------\n" %(i+1))
+			
+			print("n: %d\n" %n_list[j])
+			print("TFPN: ", ben_TFPN, mal_TFPN, ran_TFPN)
+			print()
+			print("TP: %d TN: %d FP: %d FN: %d" %(ben_TP[j],ben_TN[j],ben_FP[j],ben_FN[j]))
+			print("TP: %d TN: %d FP: %d FN: %d" %(mal_TP[j],mal_TN[j],mal_FP[j],mal_FN[j]))
+			print("TP: %d TN: %d FP: %d FN: %d\n" %(ran_TP[j],ran_TN[j],ran_FP[j],ran_FN[j]))
+
+			total_accuracy=100*(ben_TP[j]+mal_TP[j]+ran_TP[j])/total_exp_count
+			f_output[j].write("Exp %d Total Accuracy: %.4f (n: %d)\n" %(i+1, total_accuracy, n_list[j]))
+			print("Exp %d Total Accuracy: %f (n: %d)" %(i+1, total_accuracy, n_list[j]))
+			result=[]
+
+			if IsBen:
+				RecordResults(f_output, j, "ben", result, i, ben_TFPN, ben_TP[j], ben_TN[j], ben_FP[j], ben_FN[j])
+			else:
+				result.append([0,0,0])
+				
+			if IsMal:
+				RecordResults(f_output, j, "mal", result, i, mal_TFPN, mal_TP[j], mal_TN[j], mal_FP[j], mal_FN[j])
+			else:
+				result.append([0,0,0])
+
+			if IsRan:
+				RecordResults(f_output, j, "ran", result, i, ran_TFPN, ran_TP[j], ran_TN[j], ran_FP[j], ran_FN[j])
+			else:
+				result.append([0,0,0])
+		
+			f_output[j].write("\n\n")
+
+			result_trace[j].append(result)
+			print()
+
+	# print the final integrated result of k-fold cross validation
+	
+	for j in range(n_num):
+		f_output[j].write("\n\n--------------------------------- Integrated Result --------------------------------\n")
+		for l in range(k):
+			f_output[j].write("%10dth%7s" %(l+1, " "))
+		f_output[j].write("\n")	
+
+	if IsBen:
+		RecordSummary(f_output, "ben", result_trace, 0)
+	if IsMal:
+		RecordSummary(f_output, "mal", result_trace, 1)
+	if IsRan:
+		RecordSummary(f_output, "ran", result_trace, 2)
+
+	for j in range(n_num):
+		f_output[j].close()	
 # training phase start
 # First, split total samples into each of k-chunks for k-fold cross validation
 # For one time. Use the below function as least as possible. (It randomizes cross-fold samples)
@@ -782,9 +1014,10 @@ if TrainingApplied:
 
 # classification phase start
 if ClassificationApplied:
-	RestoreChunkList()
+	# RestoreChunkList()
+	RestoreCfChunkIndexOfCSV() # For Classification Using CSV log file
 	for ben_th in ben_th_list:
 		for mal_th in mal_th_list:
 			for ran_th in ran_th_list:
 				print("------------------------- Classification start (ben: %d mal: %d ran: %d) --------------------------" %(int(ben_th), int(mal_th), int(ran_th)))
-				Classification(k, n_list, ben_th, mal_th, ran_th)
+				ClassificationWithCSV(k, n_list, ben_th, mal_th, ran_th)
