@@ -11,11 +11,12 @@ from scipy.sparse import lil_matrix
 # sample_dir_mal=sys.argv[2]+"/"
 # sample_dir_ran=sys.argv[3]+"/"
 
-sample_dir_ben="G:\\ben_NT_syscall(manual)\\"
-sample_dir_mal="G:\\mal_NT_syscall(filtered)\\"
-sample_dir_ran="G:\\ran_NT_syscall(filtered3)\\"
+sample_dir_ben="G:\\sample_data\\ben_NT_syscall(manual)\\"
+sample_dir_mal="G:\\sample_data\\mal_NT_syscall(filtered)\\"
+sample_dir_ran="G:\\sample_data\\ran_NT_syscall(filtered3)\\"
 
 weight_path="C:\\exp_data\\RTFRD\\CF-NCF_anal\\"
+avg_weight_path="C:\\exp_data\\RTFRD\\CF-NCF_anal\\averaged\\"
 feature_header_path="C:\\exp_data\\feature_set\\"
 file_seq_path="C:\\exp_data\\feature_set\\"
 CSV_path="C:\\exp_data\\feature_set\\output\\"
@@ -84,6 +85,11 @@ else:
 	ran_th_list.append('0')
 	IsRan=False
 
+if "-csv" in sys.argv:
+	CSVReadApplied=True
+else:
+	CSVReadApplied=False
+
 # parse sys.argv and fill up with parameter list
 
 arg_index=0
@@ -135,7 +141,8 @@ training_dir_mal="G:/training/malware_training/"
 training_dir_ran="G:/training/ransom_training/"
 
 classification_output_dir="G:/classification_result/"
-classification_output_dir_CF_NCF="G:/classification_result/CF_NCF/"
+# classification_output_dir_CF_NCF="G:/classification_result/CF_NCF/"
+classification_output_dir_CF_NCF="G:/classification_result/CF_NCF_averaged/"
 
 training_list_dir_ben=training_dir_ben+"training_list/"
 training_list_dir_mal=training_dir_mal+"training_list/"
@@ -155,6 +162,10 @@ cf_chunk_index_dir_ran="C:\\exp_data\\RTFRD\\cf_chunk_index\\ran\\"
 
 total_exp_count=0
 
+train_index_list_ben=[]
+train_index_list_mal=[]
+train_index_list_ran=[]
+
 chunk_list_ben=[]
 chunk_list_mal=[]
 chunk_list_ran=[]
@@ -171,48 +182,48 @@ total_ben_file_num=0
 total_mal_file_num=0
 total_ran_file_num=0
 
-ben_TP=[0 for j in range(n_num)]
-ben_TN=[0 for j in range(n_num)]
-ben_FP=[0 for j in range(n_num)]
-ben_FN=[0 for j in range(n_num)]		
+ben_TP={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ben_TN={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ben_FP={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ben_FN={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}	
 
-mal_TP=[0 for j in range(n_num)]
-mal_TN=[0 for j in range(n_num)]
-mal_FP=[0 for j in range(n_num)]
-mal_FN=[0 for j in range(n_num)]
+mal_TP={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+mal_TN={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+mal_FP={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+mal_FN={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
 
-ran_TP=[0 for j in range(n_num)]
-ran_TN=[0 for j in range(n_num)]
-ran_FP=[0 for j in range(n_num)]
-ran_FN=[0 for j in range(n_num)]
+ran_TP={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ran_TN={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ran_FP={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ran_FN={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
 
-ben_score=[[] for i in range(n_num)]
-mal_score=[[] for i in range(n_num)]
-ran_score=[[] for i in range(n_num)]
+ben_score={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+mal_score={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
+ran_score={key: value for key, value in zip(n_list, [0 for i in range(n_num)])}
 
-ben_sig_dic=[{} for i in range(n_num)]
-mal_sig_dic=[{} for i in range(n_num)]
-ran_sig_dic=[{} for i in range(n_num)]
+ben_sig_dic={key: value for key, value in zip(n_list, [dict() for i in range(n_num)])}
+mal_sig_dic={key: value for key, value in zip(n_list, [dict() for i in range(n_num)])}
+ran_sig_dic={key: value for key, value in zip(n_list, [dict() for i in range(n_num)])}
 
 #Preparation for splitting each of file list into 10-fold chunks
 
 def InitializeScore(ben_score, mal_score, ran_score):
-	for i in range(n_num):
-		ben_score[i]=0
-		mal_score[i]=0
-		ran_score[i]=0
+	for n in n_list:
+		ben_score[n]=0
+		mal_score[n]=0
+		ran_score[n]=0
 
 def InitializeDic(ben_sig_dic, mal_sig_dic, ran_sig_dic):
-	for i in range(n_num):
-		ben_sig_dic[i]={}
-		mal_sig_dic[i]={}
-		ran_sig_dic[i]={}
+	for n in n_list:
+		ben_sig_dic[n]={}
+		mal_sig_dic[n]={}
+		ran_sig_dic[n]={}
 
 def InitializeTFPN():
-	for i in range(n_num):
-		ben_TP[i], ben_TN[i], ben_FP[i], ben_FN[i]=0,0,0,0
-		mal_TP[i], mal_TN[i], mal_FP[i], mal_FN[i]=0,0,0,0
-		ran_TP[i], ran_TN[i], ran_FP[i], ran_FN[i]=0,0,0,0
+	for n in n_list:
+		ben_TP[n], ben_TN[n], ben_FP[n], ben_FN[n]=0,0,0,0
+		mal_TP[n], mal_TN[n], mal_FP[n], mal_FN[n]=0,0,0,0
+		ran_TP[n], ran_TN[n], ran_FP[n], ran_FN[n]=0,0,0,0
 
 def SplitSamplesToChunks(k, sample_dir, training_list_dir, cf_chunk_dir, class_label):
 	
@@ -275,11 +286,13 @@ def Zw_To_Nt_Translator(target_list):
 		if Zw_starter.startswith('Zw'):
 			target_list[i]='Nt'+Zw_starter[2:]
 
-def CF_NCF_Weight(n, feature_header, class_label, weight_path=weight_path):
-	file_name=class_label+"_"+str(n)+"_gram_CF_NCF.csv"
+def CF_NCF_Weight(n, feature_header, class_label, weight_path=avg_weight_path):
+	
 	with open(feature_header, 'r') as f:
-		feature_list=f.read().split()
+		feature_list=f.read().split('\n')
+		feature_list.pop()
 
+	file_name=class_label+"_"+str(n)+"_gram_CF_NCF.csv"
 	w_data=pd.read_csv(weight_path+file_name, header=None).as_matrix()
 	CF_weight=w_data[0]
 	NCF_weight=w_data[1]
@@ -289,10 +302,29 @@ def CF_NCF_Weight(n, feature_header, class_label, weight_path=weight_path):
 	weight={key:value for key, value in zip(feature_list, [CF_weight[i] * (1 - NCF_weight[i]) for i in range(col_num)])}
 	return weight
 
-def ApplyWeight(weight_vector, target_vector):
+def ApplyWeight(n, i, exception_dir, weight_vector, target_vector):
+	# print(target_vector)
+	for feature in list(target_vector.keys()):
+		try:
+			target_vector[feature]*=weight_vector[str(feature)]
+		except:
+			print("[In Error] feature name: %s" %(feature))
+			if feature not in weight_vector:
+				print("Absent Feature in Weight Vector: %s" %feature)
+				f_out=open(exception_dir+str(n)+"_gram/"+"weight_vector_"+str(i)+".txt",'w')
+				f_out.write(str(weight_vector))
 
-	for feature in target_vector.keys():
-		target_vector[feature]*=weight_vector[str(feature)]
+def RestoreTrainIndexOfCSV(k=k):
+	for i in range(k):
+		if IsBen:
+			with open(train_index_dir_ben+"train_index_list_"+str(i)+".txt",'r') as f:
+				train_index_list_ben.append(list(map(int,f.read().split())))
+		if IsMal:
+			with open(train_index_dir_mal+"train_index_list_"+str(i)+".txt",'r') as f:
+				train_index_list_mal.append(list(map(int,f.read().split())))
+		if IsRan:
+			with open(train_index_dir_ran+"train_index_list_"+str(i)+".txt",'r') as f:
+				train_index_list_ran.append(list(map(int,f.read().split())))
 
 # training phase for 10-fold cross validation
 def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_list, class_label):
@@ -300,12 +332,11 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 	#f os.path.isfile(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+threshold_list[l]+"%.txt")
 	#print("threshold: ",threshold_list)
 	max_n=max(n_list)
-	n_num=len(n_list)
 
 	training_list=[]
 
 	# Weight Vector Construction
-	weight_vector={ key:value for key, value in zip(n_list, [dict() for n in n_list])}
+	weight_vector={key:value for key, value in zip(n_list, [dict() for n in n_list])}
 	for n in n_list:
 		feature_header_fname=feature_header_path+str(n)+"_gram_features.txt"
 		weight_vector[n]=CF_NCF_Weight(n, feature_header_fname, class_label)
@@ -323,7 +354,7 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 		total_gram_count=0
 
 		n_gram_dic_list={key: value for key, value in zip(n_list, [dict() for i in n_list])}
-
+		print("%d th training start!" %(i+1))
 	# n-gram training phase for each of training chunk
 		for name in training_list[i]:  # for each of files 
 			f=open(sample_dir+name, 'r')
@@ -370,8 +401,8 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 
 		# Apply Weight after n-gram dictionarization completed
 		for n in n_list:
-			ApplyWeight(weight_vector[n], n_gram_dic_list[n])
-
+			ApplyWeight(n, i, training_dir, weight_vector[n], n_gram_dic_list[n])
+			
 		#print(n_gram_matrix)
 		#print("sum: %d" %sum(n_gram_matrix.values()))
 		sorted_result_list={}
@@ -380,7 +411,7 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 		for n in n_list:
 			n_gram_dic=n_gram_dic_list[n]
 			sorted_result_list[n]=sorted(n_gram_dic.items(), key=operator.itemgetter(1), reverse=True)
-			norm_total_gram_count=(1000000-max_n+1)*total_file_num
+			# norm_total_gram_count=(1000000-max_n+1)*total_file_num
 
 			if not os.path.isdir(training_dir+str(n)+"_gram"):
 				os.mkdir(training_dir+str(n)+"_gram")
@@ -390,6 +421,10 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 			out=open(training_dir+str(n)+"_gram/training_total/"+"training_total_"+str(i+1)+".txt", 'w')
 
 			sorted_result=sorted_result_list[n]
+
+			norm_total_gram_count=0
+			for m in range(len(sorted_result)):
+				norm_total_gram_count+=sorted_result[m][1]
 
 			for l in range(len(sorted_result)):
 				out.write(str(sorted_result[l][0]) + "\t" + str(sorted_result[l][1]/norm_total_gram_count) + "\n")
@@ -404,7 +439,7 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 			for th in threshold_list:
 				out=open(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+th+"%.txt", 'w')
 				cut_index=ReturnCutIndex(sorted_result, th, norm_total_gram_count)  # Cut sorted result by accumulative percentage(threshold) of system call
-				cut_result=sorted_result[:cut_index]
+				cut_result=sorted_result[:cut_index+1]
 				
 				# counting the total gram count in signature list 
 				cut_gram_total=0
@@ -420,16 +455,130 @@ def Training(k, n_list, training_list_dir, training_dir, sample_dir, threshold_l
 				out.write("Total gram count: %d\n" %cut_gram_total)
 				out.close()
 
+		print("------------------------- Training %d done -------------------------" %(i+1))
+
+def TrainingWithCSV(k, n_list, csv_matrix, training_index_list, training_dir, threshold_list, class_label):
+
+	# Weight Vector Construction
+	weight_vector={key:value for key, value in zip(n_list, [dict() for n in n_list])}
+	for n in n_list:
+		feature_header_fname=feature_header_path+str(n)+"_gram_features.txt"
+		weight_vector[n]=CF_NCF_Weight(n, feature_header_fname, class_label)
+
+	# Restore the training lists created in earlier training phase
+	# Do not update it with randomization
+	# Too complicated to analyze the result
+
+	for i in range(k):
+		total_file_num=0
+		total_gram_count=0
+
+		n_gram_dic_list={key: value for key, value in zip(n_list, [dict() for i in n_list])}
+		temp_dic_list={key: value for key, value in zip(n_list, [dict() for i in n_list])}
+		# print("%d th training start!" %(i+1))
+	# n-gram training phase for each of training chunk for each of files
+		for idx in training_index_list[i]:
+			for n in n_list:  
+				sample_log=csv_matrix[n][idx,:].toarray()[0][:-1]
+				total_file_num+=1
+				temp_dic_list[n]={}
+				total_gram_count=0
+
+				for f_idx, f_value in enumerate(sample_log):
+					if f_value == 0:
+						continue
+					f_name=idx_to_feature_name[n][f_idx]	
+					temp_dic_list[n][f_name]=f_value
+					total_gram_count+=f_value
+
+				# Restore the saved n-gram count of each file into the n_gram_matrix
+				# After normalization of each n-gram count w.r.t. each file's log size
+				normal_factor=10000000/total_gram_count
+				temp_dic=temp_dic_list[n]
+				n_gram_dic=n_gram_dic_list[n]
+
+				for n_gram in list(temp_dic.keys()):
+					if n_gram in n_gram_dic:
+						n_gram_dic[n_gram]+=int(temp_dic[n_gram]*normal_factor)
+					else:
+						n_gram_dic[n_gram]=int(temp_dic[n_gram]*normal_factor)
+	
+		# Apply Weight after n-gram dictionarization completed
+		for n in n_list:
+			ApplyWeight(n, i, training_dir, weight_vector[n], n_gram_dic_list[n])
+			
+		sorted_result_list={}
+
+		# Write training files into appropriate directory path
+		for n in n_list:
+			n_gram_dic=n_gram_dic_list[n]
+			sorted_result_list[n]=sorted(n_gram_dic.items(), key=operator.itemgetter(1), reverse=True)
+			# norm_total_gram_count=(1000000-max_n+1)*total_file_num
+
+			if not os.path.isdir(training_dir+str(n)+"_gram"):
+				os.mkdir(training_dir+str(n)+"_gram")
+
+			if not os.path.isdir(training_dir+str(n)+"_gram/training_total"):
+				os.mkdir(training_dir+str(n)+"_gram/training_total")
+			out=open(training_dir+str(n)+"_gram/training_total/"+"training_total_"+str(i+1)+".txt", 'w')
+
+			sorted_result=sorted_result_list[n]
+
+			norm_total_gram_count=0
+			for m in range(len(sorted_result)):
+				norm_total_gram_count+=sorted_result[m][1]
+
+			for l in range(len(sorted_result)):
+				out.write(str(sorted_result[l][0]) + "\t" + str(sorted_result[l][1]/norm_total_gram_count) + "\n")
+			out.write("\nTotal File num: %d\n" %total_file_num)
+			out.write("Total gram num: %d\n" %len(sorted_result))
+			out.write("Total gram count: %d\n" %total_gram_count)
+			out.write("Normalized total gram count: %d\n" %norm_total_gram_count)
+			out.close()
+
+		# prune the trained result by the threshold percentage of total # of individual api 
+
+			for th in threshold_list:
+				out=open(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+th+"%.txt", 'w')
+				cut_index=ReturnCutIndex(sorted_result, th, norm_total_gram_count)  # Cut sorted result by accumulative percentage(threshold) of system call
+				cut_result=sorted_result[:cut_index+1]
+				
+				# counting the total gram count in signature list 
+				cut_gram_total=0
+				for m in range(len(cut_result)):
+					cut_gram_total+=cut_result[m][1]
+
+				for m in range(len(cut_result)):
+					out.write(str(cut_result[m][0]) + "\t" + "%f\n" %(cut_result[m][1]/cut_gram_total))
+
+				#print(training_dir.split('/')[1] + " sig_total: %d" %sig_total)
+				out.write("\nTotal File num: %d\n" %total_file_num)
+				out.write("Total gram num: %d\n" %len(cut_result))
+				out.write("Total gram count: %d\n" %cut_gram_total)
+				out.close()
+
 		print("------------------------- Training %d done -------------------------" %(i+1))		
 
-			
+def RestoreTrainIndexOfCSV(k=k):
+	for i in range(k):
+		if IsBen:
+			with open(train_index_dir_ben+"train_index_list_"+str(i)+".txt",'r') as f:
+				train_index_list_ben.append(list(map(int,f.read().split())))
+		if IsMal:
+			with open(train_index_dir_mal+"train_index_list_"+str(i)+".txt",'r') as f:
+				train_index_list_mal.append(list(map(int,f.read().split())))
+		if IsRan:
+			with open(train_index_dir_ran+"train_index_list_"+str(i)+".txt",'r') as f:
+				train_index_list_ran.append(list(map(int,f.read().split())))			
 
 # Cut target_list by accumulative percentage(threshold) of gram count			
 def ReturnCutIndex(target_list, acc_threshold, total_count):
-	sum=0
+	c_sum=0
 	for i in range(len(target_list)):
-		sum+=target_list[i][1]
-		if (sum/total_count)*100 >= float(acc_threshold):
+		c_sum+=target_list[i][1]
+		if target_list[i][1] == 0:
+			return i-1
+		if (c_sum/total_count)*100 >= float(acc_threshold):
 			return i
 
 def RuleOutWhiteList(sign_dic1, sign_dic2):
@@ -485,7 +634,6 @@ def DecideFamily(ben_score, mal_score, ran_score):
 
 def MakeTrainedVector(i, n_list, training_dir, threshold, vector):
 	for n in n_list:
-		index=n_list.index(n)
 		fr=open(training_dir+str(n)+"_gram/"+"training"+str(i+1)+"_"+threshold+"%.txt",'r')
 		data=fr.readlines()
 		fr.close()
@@ -494,7 +642,7 @@ def MakeTrainedVector(i, n_list, training_dir, threshold, vector):
 			if '\t' not in line:
 				break
 			key_value=line.split('\t')
-			vector[index][key_value[0]]=float(key_value[1])
+			vector[n][key_value[0]]=float(key_value[1])
 
 def Classifier(f_output, chunk_list, sample_dir, class_label, ben_score, mal_score, ran_score):
 
@@ -510,11 +658,11 @@ def Classifier(f_output, chunk_list, sample_dir, class_label, ben_score, mal_sco
 		Zw_To_Nt_Translator(data)
 
 		InitializeScore(ben_score, mal_score, ran_score)
-		CalculateScore(file, data, chunk_list, sample_dir)
+		CalculateScore(file, data, sample_dir)
 		EvaluateResult(f_output, file, class_label)
 
-	for j in range(n_num):
-		f_output[j].write("\n")
+	for n in n_list:
+		f_output[n].write("\n")
 
 def CountRowsAndColumns(file_name):
 	with open(file_name,'r', encoding="utf-8") as f:
@@ -556,7 +704,8 @@ def FeatureIdxToString(n_list=n_list, feature_path=feature_header_path, CSV_dir=
 	for n in n_list:
 		file_name=feature_path+str(n)+"_gram_features.txt"
 		with open(file_name, 'r') as f:
-			features=f.read().split()
+			features=f.read().split('\n')
+			features.pop()
 
 			for idx, feature_name in enumerate(features):
 				map_dic[n][idx]=feature_name
@@ -568,33 +717,31 @@ def ClassifierWithCSV(f_output, cf_chunk_index_list, csv_matrix, idx_to_feature_
 	for idx in cf_chunk_index_list:
 		total_exp_count+=1
 		InitializeScore(ben_score, mal_score, ran_score)
-		CalculateScoreWithCSV(csv_matrix, cf_chunk_index_list, idx, idx_to_feature_name)
+		CalculateScoreWithCSV(csv_matrix, idx, idx_to_feature_name)
 		EvaluateResult(f_output, idx_to_file[idx], class_label)
 
-	for j in range(n_num):
-		f_output[j].write("\n")
+	for n in n_list:
+		f_output[n].write("\n")
 		
 
-def CalculateScore(file_name, data, chunk_list, sample_dir):
+def CalculateScore(file_name, data, sample_dir):
 
 	for j in range(len(data)-max_n+1):
-		for n_index in range(n_num):
-			n=n_list[n_index]
+		for n in n_list:
 			target=str(tuple(data[j:j+n]))
 
-			if target in ben_sig_dic[n_index]:
-				ben_score[n_index]+=ben_sig_dic[n_index][target]**2
+			if target in ben_sig_dic[n]:
+				ben_score[n]+=ben_sig_dic[n][target]**2
 
-			if target in mal_sig_dic[n_index]:
-				mal_score[n_index]+=mal_sig_dic[n_index][target]**2
+			if target in mal_sig_dic[n]:
+				mal_score[n]+=mal_sig_dic[n][target]**2
 
-			if target in ran_sig_dic[n_index]:
-				ran_score[n_index]+=ran_sig_dic[n_index][target]**2
+			if target in ran_sig_dic[n]:
+				ran_score[n]+=ran_sig_dic[n][target]**2
 
-def CalculateScoreWithCSV(csv_matrix, cf_chunk_index_list, chunk_idx, idx_to_feature_name):
+def CalculateScoreWithCSV(csv_matrix, chunk_idx, idx_to_feature_name):
 
-	for n_index in range(n_num):
-		n=n_list[n_index]
+	for n in n_list:
 		sample_log=csv_matrix[n][chunk_idx,:].toarray()[0][:-1]
 		# print(sample_log)
 		for f_idx, f_count in enumerate(sample_log):
@@ -602,72 +749,76 @@ def CalculateScoreWithCSV(csv_matrix, cf_chunk_index_list, chunk_idx, idx_to_fea
 				continue
 
 			target=idx_to_feature_name[n][f_idx]
+			# print("target: ", target)
 
-			if target in ben_sig_dic[n_index]:
-				ben_score[n_index]+=f_count*(ben_sig_dic[n_index][target]**2)
+			if target in ben_sig_dic[n]:
+				# print("target verified (in ben)")
+				ben_score[n]+=f_count*(ben_sig_dic[n][target]**2)
 
-			if target in mal_sig_dic[n_index]:
-				mal_score[n_index]+=f_count*(mal_sig_dic[n_index][target]**2)
+			if target in mal_sig_dic[n]:
+				# print("target verified (in mal)")
+				mal_score[n]+=f_count*(mal_sig_dic[n][target]**2)
 
-			if target in ran_sig_dic[n_index]:
-				ran_score[n_index]+=f_count*(ran_sig_dic[n_index][target]**2)
+			if target in ran_sig_dic[n]:
+				# print("target verified (in ran)")
+				ran_score[n]+=f_count*(ran_sig_dic[n][target]**2)
 
 def EvaluateResult(f_output, file_name, answer):
 
-	for j in range(n_num):
-		decision=DecideFamily(ben_score[j], mal_score[j], ran_score[j])
+	for n in n_list:
+		decision=DecideFamily(ben_score[n], mal_score[n], ran_score[n])
 		if decision == answer:
 			if answer == "benign":
-				ben_TP[j]+=1
-				mal_TN[j]+=1
-				ran_TN[j]+=1
-				f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "BENIGN", "TRUE", ben_score[j], mal_score[j], ran_score[j]))
+				ben_TP[n]+=1
+				mal_TN[n]+=1
+				ran_TN[n]+=1
+				f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name, "BENIGN", "TRUE", ben_score[n], mal_score[n], ran_score[n]))
 			elif answer == "malware":
-				ben_TN[j]+=1
-				mal_TP[j]+=1
-				ran_TN[j]+=1
-				f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "MALWARE", "TRUE", ben_score[j], mal_score[j], ran_score[j]))
+				ben_TN[n]+=1
+				mal_TP[n]+=1
+				ran_TN[n]+=1
+				f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name, "MALWARE", "TRUE", ben_score[n], mal_score[n], ran_score[n]))
 			elif answer == "ransom":
-				ben_TN[j]+=1
-				mal_TN[j]+=1
-				ran_TP[j]+=1
-				f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "RANSOM", "TRUE", ben_score[j], mal_score[j], ran_score[j]))				
+				ben_TN[n]+=1
+				mal_TN[n]+=1
+				ran_TP[n]+=1
+				f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name[:-8], "RANSOM", "TRUE", ben_score[n], mal_score[n], ran_score[n]))				
 		else:
 			if answer == "benign":
 				if decision == "malware":
-					ben_FN[j]+=1
-					mal_FP[j]+=1
-					ran_TN[j]+=1
-					f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "MALWARE","FALSE", ben_score[j], mal_score[j], ran_score[j]))
+					ben_FN[n]+=1
+					mal_FP[n]+=1
+					ran_TN[n]+=1
+					f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name, "MALWARE","FALSE", ben_score[n], mal_score[n], ran_score[n]))
 				elif decision == "ransom":
-					ben_FN[j]+=1
-					mal_TN[j]+=1
-					ran_FP[j]+=1
-					f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "RANSOM", "FALSE", ben_score[j], mal_score[j], ran_score[j]))
+					ben_FN[n]+=1
+					mal_TN[n]+=1
+					ran_FP[n]+=1
+					f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name, "RANSOM", "FALSE", ben_score[n], mal_score[n], ran_score[n]))
 			elif answer == "malware":
 				if decision == "benign":
-					ben_FP[j]+=1
-					mal_FN[j]+=1
-					ran_TN[j]+=1
-					f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "BENIGN", "FALSE", ben_score[j], mal_score[j], ran_score[j]))
+					ben_FP[n]+=1
+					mal_FN[n]+=1
+					ran_TN[n]+=1
+					f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name, "BENIGN", "FALSE", ben_score[n], mal_score[n], ran_score[n]))
 				elif decision == "ransom":
-					ben_TN[j]+=1
-					mal_FN[j]+=1
-					ran_FP[j]+=1
-					f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "RANSOM", "FALSE", ben_score[j], mal_score[j], ran_score[j]))
+					ben_TN[n]+=1
+					mal_FN[n]+=1
+					ran_FP[n]+=1
+					f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name, "RANSOM", "FALSE", ben_score[n], mal_score[n], ran_score[n]))
 			elif answer == "ransom":
 				if decision == "benign":
-					ben_FP[j]+=1
-					mal_TN[j]+=1
-					ran_FN[j]+=1
-					f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "BENIGN", "FALSE", ben_score[j], mal_score[j], ran_score[j]))
+					ben_FP[n]+=1
+					mal_TN[n]+=1
+					ran_FN[n]+=1
+					f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name[:-8], "BENIGN", "FALSE", ben_score[n], mal_score[n], ran_score[n]))
 				elif decision == "malware":
-					ben_TN[j]+=1
-					mal_FP[j]+=1
-					ran_FN[j]+=1
-					f_output[j].write("%s\t%s\t%s\t%f\t%f\t%f\n" %(file_name, "MALWARE", "FALSE", ben_score[j], mal_score[j], ran_score[j]))
+					ben_TN[n]+=1
+					mal_FP[n]+=1
+					ran_FN[n]+=1
+					f_output[n].write("%-70s\t%10s\t%5s\t%11.4f\t%11.4f\t%11.4f\n" %(file_name[:-8], "MALWARE", "FALSE", ben_score[n], mal_score[n], ran_score[n]))
 
-def RecordResults(f_output, j, class_label, result, i, TFPN ,TP, TN, FP, FN):
+def RecordResults(f_out, class_label, result, i, TFPN ,TP, TN, FP, FN):
 
 	try:
 		precision=100*TP/(TP+FP)
@@ -676,25 +827,25 @@ def RecordResults(f_output, j, class_label, result, i, TFPN ,TP, TN, FP, FN):
 	except ZeroDivisionError:
 		print("Exp %d %s: Zero Division Error!!" %(i+1,class_label))
 		print("TP is definitely 0 and FP or FN is 0")
-		f_output[j].write("Exp %d %s: Zero Division Error!! TP is definitely 0 and FP or FN is 0\n" %(i, class_label))
+		f_out.write("Exp %d %s: Zero Division Error!! TP is definitely 0 and FP or FN is 0\n" %(i, class_label))
 		result.append([-1,-1,-1])
 	else:
-		f_output[j].write("Exp %d %s precision: %f\trecall: %f\tacc: %f\n" %(i+1, class_label, precision, recall, acc))
+		f_out.write("Exp %d %s precision: %f\trecall: %f\tacc: %f\n" %(i+1, class_label, precision, recall, acc))
 		print("Exp %d %s precision: %f\trecall: %f\tacc: %f" %(i+1, class_label, precision, recall, acc))
 		result.append([precision, recall, acc])
 
 def RecordSummary(f_output, class_label, result_trace, index):
 
-	for j in range(n_num):
+	for n in n_list:
 		for l in range(k):
-			f_output[j].write("%10s%7.4f" %(class_label+" pre: ", result_trace[j][l][index][0]))
-		f_output[j].write("\n")
+			f_output[n].write("%10s%8.4f%2s" %(class_label+" pre: ", result_trace[n][l][index][0], "|"))
+		f_output[n].write("\n")
 		for l in range(k):	
-			f_output[j].write("%10s%7.4f" %(class_label+" rec: ", result_trace[j][l][index][1]))
-		f_output[j].write("\n")
+			f_output[n].write("%10s%8.4f%2s" %(class_label+" rec: ", result_trace[n][l][index][1], "|"))
+		f_output[n].write("\n")
 		for l in range(k):
-			f_output[j].write("%10s%7.4f" %(class_label+" acc: ", result_trace[j][l][index][2]))
-		f_output[j].write("\n\n")
+			f_output[n].write("%10s%8.4f%2s" %(class_label+" acc: ", result_trace[n][l][index][2], "|"))
+		f_output[n].write("\n\n")
 
 def RestoreChunkList():
 	# Restore the chunk lists randomly created from latest training phase
@@ -738,27 +889,25 @@ def Classification(k, n_list, ben_threshold, mal_threshold, ran_threshold):
 	if IsRan:
 		r_str="ransomware"
 
-	result_trace=[]
-	f_output=[]
+	result_trace={key: value for key, value in zip(n_list, [[] for n in n_list])}
+	f_output={}
 	
 	for n in n_list:
 		if not os.path.isdir(classification_output_dir+str(n)+"_gram/"):
 			os.mkdir(classification_output_dir+str(n)+"_gram/")
 
-	for i in range(n_num): 
-		f_output.append(open(classification_output_dir+str(n_list[i])+"_gram/"+"cf_result_"+ben_threshold+"_"+mal_threshold+"_"+ran_threshold+".txt",'w'))
-		f_output[i].write("="*100+"\n\n")
-		f_output[i].write("This file shows the result of classification among %s %s %s\n\n" %(b_str, m_str, r_str))
-		
-		result_trace.append([])
+	for n in n_list: 
+		f_output[n]=open(classification_output_dir+str(n)+"_gram/"+"cf_result_"+ben_threshold+"_"+mal_threshold+"_"+ran_threshold+".txt",'w')
+		f_output[n].write("="*100+"\n\n")
+		f_output[n].write("This file shows the result of classification among %s %s %s\n\n" %(b_str, m_str, r_str))
 
 		if IsBen:
-			f_output[i].write("benign threshold: %d\n" %int(ben_threshold))
+			f_output[n].write("benign threshold: %d\n" %int(ben_threshold))
 		if IsMal:
-			f_output[i].write("malware threshold: %d\n" %int(mal_threshold))
+			f_output[n].write("malware threshold: %d\n" %int(mal_threshold))
 		if IsRan:
-			f_output[i].write("ransomware threshold: %d\n\n" %int(ran_threshold))
-		f_output[i].write("="*100+"\n\n")
+			f_output[n].write("ransomware threshold: %d\n\n" %int(ran_threshold))
+		f_output[n].write("="*100+"\n\n")
 
 	# classification process start!!!
 	for i in range(k):	
@@ -767,8 +916,8 @@ def Classification(k, n_list, ben_threshold, mal_threshold, ran_threshold):
 		InitializeDic(ben_sig_dic, mal_sig_dic, ran_sig_dic)
 		InitializeTFPN()
 
-		for j in range(n_num):
-			f_output[j].write("-"*20+" Experiment "+str(i+1)+"-"*20 +"\n\n")
+		for n in n_list:
+			f_output[n].write("-"*20+" Experiment "+str(i+1)+"-"*20 +"\n\n")
 
 		# read training file of corresponding threshold
 		# translate benign, ransom, malware training file into dictionary structure..
@@ -793,54 +942,54 @@ def Classification(k, n_list, ben_threshold, mal_threshold, ran_threshold):
 		# Save the result into file
 		print("-------------- Exp %d total result (ben: %s mal: %s ran: %s) --------------\n" %(i+1, ben_threshold, mal_threshold, ran_threshold))
 
-		for j in range(n_num):
-			ben_TFPN=ben_TP[j]+ben_TN[j]+ben_FP[j]+ben_FN[j]
-			mal_TFPN=mal_TP[j]+mal_TN[j]+mal_FP[j]+mal_FN[j]
-			ran_TFPN=ran_TP[j]+ran_TN[j]+ran_FP[j]+ran_FN[j]
+		for n in n_list:
+			ben_TFPN=ben_TP[n]+ben_TN[n]+ben_FP[n]+ben_FN[n]
+			mal_TFPN=mal_TP[n]+mal_TN[n]+mal_FP[n]+mal_FN[n]
+			ran_TFPN=ran_TP[n]+ran_TN[n]+ran_FP[n]+ran_FN[n]
 
 			if total_exp_count != max(ben_TFPN, mal_TFPN, ran_TFPN):
 				print("------------------------- Experiment %d error -------------------------" %(i+1))
 				print ("Total exp count: %d\t TFPN: %d" %(total_exp_count, max(ben_TFPN, mal_TFPN, ran_TFPN)))
 			
-			f_output[j].write("\n")
-			f_output[j].write("-------------------- Exp %d total result --------------------\n" %(i+1))
+			f_output[n].write("\n")
+			f_output[n].write("-------------------- Exp %d total result --------------------\n" %(i+1))
 			
-			print("-n: %d\n" %n_list[j])
+			print("-n: %d\n" %n)
 			print("TFPN: ", ben_TFPN, mal_TFPN, ran_TFPN)
 			print()
-			print("TP: %d TN: %d FP: %d FN: %d" %(ben_TP[j],ben_TN[j],ben_FP[j],ben_FN[j]))
-			print("TP: %d TN: %d FP: %d FN: %d" %(mal_TP[j],mal_TN[j],mal_FP[j],mal_FN[j]))
-			print("TP: %d TN: %d FP: %d FN: %d\n" %(ran_TP[j],ran_TN[j],ran_FP[j],ran_FN[j]))
+			print("TP: %d TN: %d FP: %d FN: %d" %(ben_TP[n], ben_TN[n], ben_FP[n], ben_FN[n]))
+			print("TP: %d TN: %d FP: %d FN: %d" %(mal_TP[n], mal_TN[n], mal_FP[n], mal_FN[n]))
+			print("TP: %d TN: %d FP: %d FN: %d\n" %(ran_TP[n], ran_TN[n], ran_FP[n], ran_FN[n]))
 
 			result=[]
 
 			if IsBen:
-				RecordResults(f_output, j, "ben", result, i, ben_TFPN, ben_TP[j], ben_TN[j], ben_FP[j], ben_FN[j])
+				RecordResults(f_output[n], "ben", result, i, ben_TFPN, ben_TP[n], ben_TN[n], ben_FP[n], ben_FN[n])
 			else:
 				result.append([0,0,0])
 				
 			if IsMal:
-				RecordResults(f_output, j, "mal", result, i, mal_TFPN, mal_TP[j], mal_TN[j], mal_FP[j], mal_FN[j])
+				RecordResults(f_output[n], "mal", result, i, mal_TFPN, mal_TP[n], mal_TN[n], mal_FP[n], mal_FN[n])
 			else:
 				result.append([0,0,0])
 
 			if IsRan:
-				RecordResults(f_output, j, "ran", result, i, ran_TFPN, ran_TP[j], ran_TN[j], ran_FP[j], ran_FN[j])
+				RecordResults(f_output[n], "ran", result, i, ran_TFPN, ran_TP[n], ran_TN[n], ran_FP[n], ran_FN[n])
 			else:
 				result.append([0,0,0])
 		
-			f_output[j].write("\n\n")
+			f_output[n].write("\n\n")
 
-			result_trace[j].append(result)
+			result_trace[n].append(result)
 			print()
 
 	# print the final integrated result of k-fold cross validation
 	
-	for j in range(n_num):
-		f_output[j].write("\n\n--------------------------------- Integrated Result --------------------------------\n")
+	for n in n_list:
+		f_output[n].write("\n\n--------------------------------- Integrated Result --------------------------------\n")
 		for l in range(k):
-			f_output[j].write("%10dth%7s" %(l+1, " "))
-		f_output[j].write("\n")	
+			f_output[n].write("%10dth%7s" %(l+1, " "))
+		f_output[n].write("\n")	
 
 	if IsBen:
 		RecordSummary(f_output, "ben", result_trace, 0)
@@ -849,10 +998,10 @@ def Classification(k, n_list, ben_threshold, mal_threshold, ran_threshold):
 	if IsRan:
 		RecordSummary(f_output, "ran", result_trace, 2)
 
-	for j in range(n_num):
-		f_output[j].close()	
+	for n in n_list:
+		f_output[n].close()	
 
-def ClassificationWithCSV(k, n_list, ben_threshold, mal_threshold, ran_threshold, CSV_dir=CSV_path):
+def ClassificationWithCSV(k, n_list, csv_matrix, idx_to_file, idx_to_feature_name, ben_threshold, mal_threshold, ran_threshold, CSV_dir=CSV_path):
 
 	global total_exp_count
 	
@@ -865,35 +1014,21 @@ def ClassificationWithCSV(k, n_list, ben_threshold, mal_threshold, ran_threshold
 	if IsRan:
 		r_str="ransomware"
 
-	result_trace=[]
-	f_output=[]
-	csv_matrix={}
-	idx_to_file=ChunkIdxToFileName()
-	idx_to_feature_name=FeatureIdxToString()
+	result_trace={key: value for key, value in zip(n_list, [[] for n in n_list])}
+	f_output={}
 
-	for n in n_list:
-		if not os.path.isdir(classification_output_dir_CF_NCF+str(n)+"_gram/"):
-			os.mkdir(classification_output_dir_CF_NCF+str(n)+"_gram/")	
-		file_name=str(n)+"_gram_vector.csv"
-		row_num, col_num = CountRowsAndColumns(CSV_dir+file_name)
-		csv_matrix[n]=SparseMatrix(file_name, row_num, col_num)
-
-	print("CSV Loading Done!")
-
-	for i in range(n_num): 
-		f_output.append(open(classification_output_dir_CF_NCF+str(n_list[i])+"_gram/"+"cf_result_"+ben_threshold+"_"+mal_threshold+"_"+ran_threshold+".txt",'w'))
-		f_output[i].write("="*100+"\n\n")
-		f_output[i].write("This file shows the result of classification among %s %s %s\n\n" %(b_str, m_str, r_str))
-		
-		result_trace.append([])
+	for n in n_list: 
+		f_output[n]=open(classification_output_dir_CF_NCF+str(n)+"_gram/"+"cf_result_"+ben_threshold+"_"+mal_threshold+"_"+ran_threshold+".txt",'w')
+		f_output[n].write("="*100+"\n\n")
+		f_output[n].write("This file shows the result of classification among %s %s %s\n\n" %(b_str, m_str, r_str))
 
 		if IsBen:
-			f_output[i].write("benign threshold: %d\n" %int(ben_threshold))
+			f_output[n].write("benign threshold: %d\n" %int(ben_threshold))
 		if IsMal:
-			f_output[i].write("malware threshold: %d\n" %int(mal_threshold))
+			f_output[n].write("malware threshold: %d\n" %int(mal_threshold))
 		if IsRan:
-			f_output[i].write("ransomware threshold: %d\n\n" %int(ran_threshold))
-		f_output[i].write("="*100+"\n\n")
+			f_output[n].write("ransomware threshold: %d\n\n" %int(ran_threshold))
+		f_output[n].write("="*100+"\n\n")
 
 	# classification process start!!!
 	for i in range(k):	
@@ -902,8 +1037,8 @@ def ClassificationWithCSV(k, n_list, ben_threshold, mal_threshold, ran_threshold
 		InitializeDic(ben_sig_dic, mal_sig_dic, ran_sig_dic)
 		InitializeTFPN()
 
-		for j in range(n_num):
-			f_output[j].write("-"*20+" Experiment "+str(i+1)+"-"*20 +"\n\n")
+		for n in n_list:
+			f_output[n].write("-"*20+" Experiment "+str(i+1)+"-"*20 +"\n\n")
 
 		# read training file of corresponding threshold
 		# translate benign, ransom, malware training file into dictionary structure..
@@ -928,57 +1063,57 @@ def ClassificationWithCSV(k, n_list, ben_threshold, mal_threshold, ran_threshold
 		# Save the result into file
 		print("-------------- Exp %d total result (ben: %s mal: %s ran: %s) --------------\n" %(i+1, ben_threshold, mal_threshold, ran_threshold))
 
-		for j in range(n_num):
-			ben_TFPN=ben_TP[j]+ben_TN[j]+ben_FP[j]+ben_FN[j]
-			mal_TFPN=mal_TP[j]+mal_TN[j]+mal_FP[j]+mal_FN[j]
-			ran_TFPN=ran_TP[j]+ran_TN[j]+ran_FP[j]+ran_FN[j]
+		for n in n_list:
+			ben_TFPN=ben_TP[n]+ben_TN[n]+ben_FP[n]+ben_FN[n]
+			mal_TFPN=mal_TP[n]+mal_TN[n]+mal_FP[n]+mal_FN[n]
+			ran_TFPN=ran_TP[n]+ran_TN[n]+ran_FP[n]+ran_FN[n]
 
 			if total_exp_count != max(ben_TFPN, mal_TFPN, ran_TFPN):
 				print("------------------------- Experiment %d error -------------------------" %(i+1))
 				print ("Total exp count: %d\t TFPN: %d" %(total_exp_count, max(ben_TFPN, mal_TFPN, ran_TFPN)))
 			
-			f_output[j].write("\n")
-			f_output[j].write("-------------------- Exp %d total result --------------------\n" %(i+1))
+			f_output[n].write("\n")
+			f_output[n].write("-"*50+" Exp "+str(i+1)+" total result " +"-"*50+"\n")
 			
-			print("n: %d\n" %n_list[j])
+			print("n: %d\n" %n)
 			print("TFPN: ", ben_TFPN, mal_TFPN, ran_TFPN)
 			print()
-			print("TP: %d TN: %d FP: %d FN: %d" %(ben_TP[j],ben_TN[j],ben_FP[j],ben_FN[j]))
-			print("TP: %d TN: %d FP: %d FN: %d" %(mal_TP[j],mal_TN[j],mal_FP[j],mal_FN[j]))
-			print("TP: %d TN: %d FP: %d FN: %d\n" %(ran_TP[j],ran_TN[j],ran_FP[j],ran_FN[j]))
+			print("TP: %d TN: %d FP: %d FN: %d" %(ben_TP[n],ben_TN[n],ben_FP[n],ben_FN[n]))
+			print("TP: %d TN: %d FP: %d FN: %d" %(mal_TP[n],mal_TN[n],mal_FP[n],mal_FN[n]))
+			print("TP: %d TN: %d FP: %d FN: %d\n" %(ran_TP[n],ran_TN[n],ran_FP[n],ran_FN[n]))
 
-			total_accuracy=100*(ben_TP[j]+mal_TP[j]+ran_TP[j])/total_exp_count
-			f_output[j].write("Exp %d Total Accuracy: %.4f (n: %d)\n" %(i+1, total_accuracy, n_list[j]))
-			print("Exp %d Total Accuracy: %f (n: %d)" %(i+1, total_accuracy, n_list[j]))
+			total_accuracy=100*(ben_TP[n]+mal_TP[n]+ran_TP[n])/total_exp_count
+			f_output[n].write("Exp %d Total Accuracy: %.4f (n: %d)\n" %(i+1, total_accuracy, n))
+			print("Exp %d Total Accuracy: %f (n: %d)" %(i+1, total_accuracy, n))
 			result=[]
 
 			if IsBen:
-				RecordResults(f_output, j, "ben", result, i, ben_TFPN, ben_TP[j], ben_TN[j], ben_FP[j], ben_FN[j])
+				RecordResults(f_output[n], "ben", result, i, ben_TFPN, ben_TP[n], ben_TN[n], ben_FP[n], ben_FN[n])
 			else:
 				result.append([0,0,0])
 				
 			if IsMal:
-				RecordResults(f_output, j, "mal", result, i, mal_TFPN, mal_TP[j], mal_TN[j], mal_FP[j], mal_FN[j])
+				RecordResults(f_output[n], "mal", result, i, mal_TFPN, mal_TP[n], mal_TN[n], mal_FP[n], mal_FN[n])
 			else:
 				result.append([0,0,0])
 
 			if IsRan:
-				RecordResults(f_output, j, "ran", result, i, ran_TFPN, ran_TP[j], ran_TN[j], ran_FP[j], ran_FN[j])
+				RecordResults(f_output[n], "ran", result, i, ran_TFPN, ran_TP[n], ran_TN[n], ran_FP[n], ran_FN[n])
 			else:
 				result.append([0,0,0])
 		
-			f_output[j].write("\n\n")
+			f_output[n].write("\n\n")
 
-			result_trace[j].append(result)
+			result_trace[n].append(result)
 			print()
 
 	# print the final integrated result of k-fold cross validation
 	
-	for j in range(n_num):
-		f_output[j].write("\n\n--------------------------------- Integrated Result --------------------------------\n")
+	for n in n_list:
+		f_output[n].write("\n\n--------------------------------- Integrated Result --------------------------------\n")
 		for l in range(k):
-			f_output[j].write("%10dth%7s" %(l+1, " "))
-		f_output[j].write("\n")	
+			f_output[n].write("%10dth%8s" %(l+1, " "))
+		f_output[n].write("\n")	
 
 	if IsBen:
 		RecordSummary(f_output, "ben", result_trace, 0)
@@ -987,8 +1122,8 @@ def ClassificationWithCSV(k, n_list, ben_threshold, mal_threshold, ran_threshold
 	if IsRan:
 		RecordSummary(f_output, "ran", result_trace, 2)
 
-	for j in range(n_num):
-		f_output[j].close()	
+	for n in n_list:
+		f_output[n].close()	
 # training phase start
 # First, split total samples into each of k-chunks for k-fold cross validation
 # For one time. Use the below function as least as possible. (It randomizes cross-fold samples)
@@ -1001,23 +1136,60 @@ if SplitApplied:
 	if IsRan:
 		SplitSamplesToChunks(k, sample_dir_ran, training_list_dir_ran, cf_chunk_dir_ran, "ran")
 
+if CSVReadApplied:
+	idx_to_feature_name=FeatureIdxToString()
+
+	csv_matrix={}
+	for n in n_list:
+		if not os.path.isdir(classification_output_dir_CF_NCF+str(n)+"_gram/"):
+			os.mkdir(classification_output_dir_CF_NCF+str(n)+"_gram/")	
+		file_name=str(n)+"_gram_vector.csv"
+		row_num, col_num = CountRowsAndColumns(CSV_path+file_name)
+		csv_matrix[n]=SparseMatrix(file_name, row_num, col_num)
+
+	print("CSV Loading Done!")
+
 if TrainingApplied:
-	if IsBen:
-		print("------------------------- Benign Training -------------------------")
-		Training(k, n_list, training_list_dir_ben, training_dir_ben, sample_dir_ben, ben_th_list, "ben")
-	if IsMal:
-		print("------------------------- Malware Training -------------------------")
-		Training(k, n_list, training_list_dir_mal, training_dir_mal, sample_dir_mal, mal_th_list, "mal")
-	if IsRan:
-		print("------------------------- Ransom Training -------------------------")
-		Training(k, n_list, training_list_dir_ran, training_dir_ran, sample_dir_ran, ran_th_list, "ran")
+
+	if CSVReadApplied:
+		RestoreTrainIndexOfCSV()
+		if IsBen:
+			print("------------------------- Benign Training -------------------------")
+			TrainingWithCSV(k, n_list, csv_matrix, train_index_list_ben, training_dir_ben, ben_th_list, "ben")
+		if IsMal:
+			print("------------------------- Malware Training -------------------------")
+			TrainingWithCSV(k, n_list, csv_matrix, train_index_list_mal, training_dir_mal, mal_th_list, "mal")
+		if IsRan:
+			print("------------------------- Ransom Training -------------------------")
+			TrainingWithCSV(k, n_list, csv_matrix, train_index_list_ran, training_dir_ran, ran_th_list, "ran")
+	else:
+		if IsBen:
+			print("------------------------- Benign Training -------------------------")
+			Training(k, n_list, training_list_dir_ben, training_dir_ben, sample_dir_ben, ben_th_list, "ben")
+		if IsMal:
+			print("------------------------- Malware Training -------------------------")
+			Training(k, n_list, training_list_dir_mal, training_dir_mal, sample_dir_mal, mal_th_list, "mal")
+		if IsRan:
+			print("------------------------- Ransom Training -------------------------")
+			Training(k, n_list, training_list_dir_ran, training_dir_ran, sample_dir_ran, ran_th_list, "ran")
 
 # classification phase start
 if ClassificationApplied:
-	# RestoreChunkList()
-	RestoreCfChunkIndexOfCSV() # For Classification Using CSV log file
-	for ben_th in ben_th_list:
-		for mal_th in mal_th_list:
-			for ran_th in ran_th_list:
-				print("------------------------- Classification start (ben: %d mal: %d ran: %d) --------------------------" %(int(ben_th), int(mal_th), int(ran_th)))
-				ClassificationWithCSV(k, n_list, ben_th, mal_th, ran_th)
+
+	if CSVReadApplied:
+		RestoreCfChunkIndexOfCSV() # For Classification Using CSV log file
+		idx_to_file=ChunkIdxToFileName()
+
+		for ben_th in ben_th_list:
+			for mal_th in mal_th_list:
+				for ran_th in ran_th_list:
+					print("------------------------- Classification start (ben: %d mal: %d ran: %d) --------------------------" %(int(ben_th), int(mal_th), int(ran_th)))
+					ClassificationWithCSV(k, n_list, csv_matrix, idx_to_file, idx_to_feature_name, ben_th, mal_th, ran_th)
+	else:
+		RestoreChunkList()
+
+		for ben_th in ben_th_list:
+			for mal_th in mal_th_list:
+				for ran_th in ran_th_list:
+					print("------------------------- Classification start (ben: %d mal: %d ran: %d) --------------------------" %(int(ben_th), int(mal_th), int(ran_th)))
+					Classification(k, n_list, ben_th, mal_th, ran_th)
